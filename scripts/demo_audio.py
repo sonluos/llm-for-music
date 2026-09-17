@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from llm_music.audio_io import save_audio
-from llm_music.convolution import convolve, moving_average_kernel
+from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.signals import generate_multitone
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
@@ -99,6 +99,22 @@ def main() -> None:
     plt.close()
 
     print(f"Saved filter comparison plot to {DATA_OUTPUT / 'filter_comparison.png'}")
+
+    # --- Filter frequency response (independent of any input signal) ---
+    freqs_response, magnitude_response = frequency_response(kernel, SAMPLE_RATE)
+    db_response = magnitude_to_db(magnitude_response)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(freqs_response, db_response)
+    plt.xlim(0, SAMPLE_RATE / 2)
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title(f"Frequency Response — {FILTER_KERNEL_SIZE}-tap Moving Average")
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "filter_frequency_response.png")
+    plt.close()
+
+    print(f"Saved filter frequency response plot to {DATA_OUTPUT / 'filter_frequency_response.png'}")
 
 
 if __name__ == "__main__":

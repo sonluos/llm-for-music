@@ -2,7 +2,7 @@
 
 import torch
 
-from llm_music.convolution import convolve, moving_average_kernel
+from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 
 
 def test_convolution_output_length() -> None:
@@ -23,3 +23,21 @@ def test_moving_average_kernel_sums_to_one() -> None:
     kernel = moving_average_kernel(7)
     assert kernel.shape[-1] == 7
     assert torch.isclose(kernel.sum(), torch.tensor(1.0), atol=1e-6)
+
+
+def test_frequency_response_dc_gain_matches_kernel_sum() -> None:
+    kernel = moving_average_kernel(9)
+    freqs, magnitude = frequency_response(kernel, sample_rate=44100)
+    assert freqs[0].item() == 0.0
+    assert torch.isclose(magnitude[0], kernel.sum(), atol=1e-5)
+
+
+def test_frequency_response_null_at_expected_frequency() -> None:
+    sample_rate = 44100
+    size = 9
+    kernel = moving_average_kernel(size)
+    freqs, magnitude = frequency_response(kernel, sample_rate, n_fft=8192)
+
+    null_freq = sample_rate / size
+    idx = (freqs - null_freq).abs().argmin()
+    assert magnitude[idx].item() < 0.01
