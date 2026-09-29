@@ -2,6 +2,7 @@
 
 from llm_music.audio_io import load_audio, save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
+from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
@@ -15,4 +16,10 @@ __all__ = [
     "convolve",
     "moving_average_kernel",
     "frequency_response",
+    "lowpass",
+    "highpass",
+    "peaking",
+    "low_shelf",
+    "high_shelf",
+    "apply_biquad",
 ]

@@ -17,6 +17,7 @@ import torch
 
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
+from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
 from llm_music.signals import generate_multitone
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
@@ -115,6 +116,38 @@ def main() -> None:
     plt.close()
 
     print(f"Saved filter frequency response plot to {DATA_OUTPUT / 'filter_frequency_response.png'}")
+
+    # --- Parametric EQ: frequency response of each biquad filter type ---
+    def _biquad_response(b: torch.Tensor, a: torch.Tensor, length: int = 8192):
+        impulse = torch.zeros(length)
+        impulse[0] = 1.0
+        ir = apply_biquad(impulse, b, a)
+        freqs_ir, magnitude_ir = compute_fft(ir, SAMPLE_RATE)
+        return freqs_ir[1:], magnitude_ir[1:]  # drop DC bin (invalid on a log-frequency axis)
+
+    eq_filters = {
+        "Low-pass 1kHz": lowpass(1000.0, 0.7071, SAMPLE_RATE),
+        "High-pass 1kHz": highpass(1000.0, 0.7071, SAMPLE_RATE),
+        "Peaking +12dB @1kHz": peaking(1000.0, 12.0, 1.0, SAMPLE_RATE),
+        "Low-shelf +12dB @200Hz": low_shelf(200.0, 12.0, SAMPLE_RATE),
+        "High-shelf +12dB @5kHz": high_shelf(5000.0, 12.0, SAMPLE_RATE),
+    }
+
+    plt.figure(figsize=(10, 5))
+    for label, (b, a) in eq_filters.items():
+        freqs_eq, magnitude_eq = _biquad_response(b, a)
+        plt.plot(freqs_eq, magnitude_to_db(magnitude_eq), label=label)
+    plt.xscale("log")
+    plt.xlim(20, SAMPLE_RATE / 2)
+    plt.xlabel("Frequency (Hz, log scale)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title("Parametric EQ — Filter Type Frequency Responses")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "eq_frequency_responses.png")
+    plt.close()
+
+    print(f"Saved parametric EQ frequency response plot to {DATA_OUTPUT / 'eq_frequency_responses.png'}")
 
 
 if __name__ == "__main__":
