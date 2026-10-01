@@ -18,7 +18,8 @@ import torch
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
-from llm_music.signals import generate_multitone
+from llm_music.preprocess import preprocess_batch
+from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
 SAMPLE_RATE = 44100
@@ -30,6 +31,7 @@ FILTER_FREQS = (440.0, 4000.0)
 FILTER_KERNEL_SIZE = 9
 
 DATA_OUTPUT = Path(__file__).resolve().parent.parent / "data" / "output"
+DATA_INPUT = Path(__file__).resolve().parent.parent / "data" / "input"
 
 
 def main() -> None:
@@ -148,6 +150,28 @@ def main() -> None:
     plt.close()
 
     print(f"Saved parametric EQ frequency response plot to {DATA_OUTPUT / 'eq_frequency_responses.png'}")
+
+    # --- Batch preprocessing pipeline (resample, mono, normalize, segment) ---
+    # Two "source files" with different sample rates and loudness, to show that
+    # preprocess_batch brings them to a common rate and peak level before segmenting.
+    DATA_INPUT.mkdir(parents=True, exist_ok=True)
+    quiet_tone_sr = 22050
+    quiet_tone = generate_sine(300.0, 1.0, quiet_tone_sr, amplitude=0.3)
+    loud_tone = generate_sine(600.0, 0.5, SAMPLE_RATE, amplitude=0.9)
+
+    quiet_path = DATA_INPUT / "preprocess_quiet_22050hz.wav"
+    loud_path = DATA_INPUT / "preprocess_loud_44100hz.wav"
+    save_audio(quiet_path, quiet_tone, quiet_tone_sr)
+    save_audio(loud_path, loud_tone, SAMPLE_RATE)
+
+    segment_length = SAMPLE_RATE // 4  # 0.25 s segments
+    batch = preprocess_batch(
+        [quiet_path, loud_path], sample_rate=SAMPLE_RATE, segment_length=segment_length
+    )
+    print(
+        f"Preprocessed batch shape: {tuple(batch.shape)} "
+        f"(segments, segment_length) at {SAMPLE_RATE} Hz, peak-normalized to {batch.abs().max():.2f}"
+    )
 
 
 if __name__ == "__main__":
