@@ -1,5 +1,6 @@
 """Demo: generate a two-tone signal, save audio + plots, report FFT peaks."""
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ import torch
 
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
+from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
 from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
 from llm_music.llm_input import audio_to_llm_input
@@ -383,6 +385,27 @@ def main() -> None:
     for name, sig in [("440+1000 Hz tone", waveform), ("440+4000 Hz tone", filter_waveform)]:
         llm_input_text = audio_to_llm_input(sig, SAMPLE_RATE)
         print(f'  {name}: {{"instruction": "make it brighter", "audio_features": {llm_input_text}}}')
+
+    # --- Dataset construction: link instruction + audio features + target params ---
+    # Synthetic presets standing in for real human-written commands, reusing the
+    # example phrases from the project proposal ("보컬을 더 선명하게", "소리를 따뜻하게").
+    presets = [
+        ("보컬을 더 선명하게 해줘", {"effect": "high_shelf", "freq_hz": 6000.0, "gain_db": 5.0}),
+        ("소리를 더 따뜻하게 만들어줘", {"effect": "peaking", "freq_hz": 300.0, "gain_db": 4.0, "q": 1.0}),
+        ("저음을 줄여줘", {"effect": "low_shelf", "freq_hz": 150.0, "gain_db": -5.0}),
+    ]
+    dataset_examples = [
+        build_example(instruction, waveform, SAMPLE_RATE, target_params)
+        for instruction, target_params in presets
+    ]
+
+    dataset_path = DATA_OUTPUT / "training_examples.jsonl"
+    save_dataset(dataset_examples, dataset_path)
+    print(f"Saved {len(dataset_examples)} training examples to {dataset_path}")
+
+    loaded_examples = load_dataset(dataset_path)
+    print("Loaded example 0:")
+    print(json.dumps(loaded_examples[0], ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

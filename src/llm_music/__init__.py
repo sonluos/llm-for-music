@@ -2,6 +2,7 @@
 
 from llm_music.audio_io import load_audio, save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
+from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import (
     apply_biquad,
     apply_eq_chain,
@@ -69,4 +70,7 @@ __all__ = [
     "normalize_features",
     "format_for_llm_input",
     "audio_to_llm_input",
+    "build_example",
+    "save_dataset",
+    "load_dataset",
 ]

@@ -8,9 +8,11 @@ Fourier transform/spectrograms, 1D convolution/filtering, parametric EQ (biquad 
 filters, applied individually or as a chain), a batch audio preprocessing pipeline,
 analog-vs-digital quality tradeoffs (bit-depth quantization, sample-rate round-trip
 loss), an integrated preprocessing-to-EQ execution pipeline, a basic audio feature
-extraction module (RMS, spectral centroid, spectral rolloff, band energy), and
-normalization/formatting of those features into an LLM-prompt-ready JSON string. No
-actual LLM call or reverb logic is included yet.
+extraction module (RMS, spectral centroid, spectral rolloff, band energy),
+normalization/formatting of those features into an LLM-prompt-ready JSON string, and
+a training-example data structure linking an instruction, audio features, and target
+effect parameters (with JSON Lines save/load). No actual LLM call or reverb logic is
+included yet.
 
 ## Structure
 
@@ -24,6 +26,8 @@ src/llm_music/
     features.py     # compute_rms, spectral_centroid, spectral_rolloff, band_energy
     llm_input.py    # extract_feature_vector / normalize_features / format_for_llm_input,
                     # and audio_to_llm_input tying them into one call (a JSON string)
+    dataset.py      # build_example: links an instruction + audio features + target
+                    # effect params into one record; save_dataset / load_dataset (JSONL)
     convolution.py  # convolve (full 1D linear convolution) / moving_average_kernel /
                     # frequency_response (a filter's own magnitude response)
     eq.py           # biquad filter design (lowpass, highpass, peaking, low_shelf,
@@ -46,8 +50,10 @@ scripts/
                   # formula; sample-rate round-trip quality/spectral loss; the integrated
                   # pipeline's RMS before/after an EQ chain; a spectrogram of a tone that
                   # changes frequency over time (440 -> 1000 -> 4000 Hz); RMS/spectral
-                  # centroid/rolloff/band energy compared across two tones; and each
-                  # tone's normalized features formatted as an LLM-prompt-ready JSON string
+                  # centroid/rolloff/band energy compared across two tones; each tone's
+                  # normalized features formatted as an LLM-prompt-ready JSON string; and
+                  # a small synthetic training set (Korean instructions + target EQ
+                  # params) saved/reloaded as JSON Lines
 tests/
     test_dsp.py         # sine length, FFT peak accuracy, save/load consistency
     test_convolution.py # convolution output length, impulse response, kernel normalization
@@ -58,6 +64,7 @@ tests/
     test_stft.py        # STFT shapes, validation, and tracking stationary/changing tone frequency
     test_features.py    # RMS/centroid/rolloff against known tones, band energy concentration/coverage
     test_llm_input.py   # feature-dict keys/validation, Hz normalization/clamping, valid-JSON output
+    test_dataset.py      # example structure/validation, JSONL save/load roundtrip, Korean text I/O
 data/
     input/        # place source audio here (demo also writes its preprocessing inputs here)
     output/       # generated audio and plots land here
