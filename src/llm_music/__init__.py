@@ -12,6 +12,12 @@ from llm_music.eq import (
     peaking,
 )
 from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
+from llm_music.llm_input import (
+    audio_to_llm_input,
+    extract_feature_vector,
+    format_for_llm_input,
+    normalize_features,
+)
 from llm_music.pipeline import PipelineResult, run_pipeline
 from llm_music.preprocess import (
     normalize_peak,
@@ -59,4 +65,8 @@ __all__ = [
     "spectral_centroid",
     "spectral_rolloff",
     "band_energy",
+    "extract_feature_vector",
+    "normalize_features",
+    "format_for_llm_input",
+    "audio_to_llm_input",
 ]

@@ -20,6 +20,7 @@ from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
 from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
+from llm_music.llm_input import audio_to_llm_input
 from llm_music.pipeline import run_pipeline
 from llm_music.preprocess import preprocess_batch, resample
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
@@ -374,6 +375,14 @@ def main() -> None:
     plt.close()
 
     print(f"Saved band energy plot to {DATA_OUTPUT / 'band_energy.png'}")
+
+    # --- LLM input formatting: normalize features and serialize for a prompt ---
+    # Mirrors the eventual pipeline: a natural-language instruction would be sent
+    # to the LLM alongside this normalized, JSON-formatted audio description.
+    print("LLM input formatting (normalized features as JSON):")
+    for name, sig in [("440+1000 Hz tone", waveform), ("440+4000 Hz tone", filter_waveform)]:
+        llm_input_text = audio_to_llm_input(sig, SAMPLE_RATE)
+        print(f'  {name}: {{"instruction": "make it brighter", "audio_features": {llm_input_text}}}')
 
 
 if __name__ == "__main__":
