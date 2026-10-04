@@ -23,6 +23,7 @@ from llm_music.preprocess import (
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
+from llm_music.stft import compute_stft
 
 __all__ = [
     "load_audio",
@@ -52,4 +53,5 @@ __all__ = [
     "theoretical_sqnr_db",
     "run_pipeline",
     "PipelineResult",
+    "compute_stft",
 ]

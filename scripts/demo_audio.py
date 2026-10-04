@@ -24,6 +24,7 @@ from llm_music.preprocess import preprocess_batch, resample
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
+from llm_music.stft import compute_stft
 
 SAMPLE_RATE = 44100
 DURATION = 2.0
@@ -297,6 +298,49 @@ def main() -> None:
     plt.close()
 
     print(f"Saved pipeline RMS comparison plot to {DATA_OUTPUT / 'pipeline_rms_comparison.png'}")
+
+    # --- STFT / spectrogram: visualize frequency content changing over time ---
+    # Three 1-second tones back to back, so the spectrogram should show three
+    # distinct horizontal bands at different frequencies over time.
+    stft_tone_durations = 1.0
+    stft_freqs_sequence = (440.0, 1000.0, 4000.0)
+    stft_waveform = torch.cat(
+        [generate_sine(f, stft_tone_durations, SAMPLE_RATE, amplitude=0.8) for f in stft_freqs_sequence]
+    )
+
+    n_fft = 2048
+    hop_length = 512
+    stft_freq_axis, stft_time_axis, stft_magnitude = compute_stft(
+        stft_waveform, SAMPLE_RATE, n_fft, hop_length
+    )
+    stft_db = magnitude_to_db(stft_magnitude)
+
+    plt.figure(figsize=(10, 5))
+    plt.imshow(
+        stft_db,
+        aspect="auto",
+        origin="lower",
+        extent=[stft_time_axis[0], stft_time_axis[-1], stft_freq_axis[0], stft_freq_axis[-1]],
+        cmap="magma",
+    )
+    plt.ylim(0, 5000)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Frequency (Hz)")
+    plt.title("Spectrogram — 440 Hz -> 1000 Hz -> 4000 Hz")
+    plt.colorbar(label="Magnitude (dB)")
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "spectrogram.png")
+    plt.close()
+
+    print(f"Saved spectrogram plot to {DATA_OUTPUT / 'spectrogram.png'}")
+
+    # Confirm the frequency tracked by the spectrogram at the center of each tone.
+    print("Spectrogram frequency tracking (peak bin per tone's center time):")
+    for i, expected_freq in enumerate(stft_freqs_sequence):
+        center_time = (i + 0.5) * stft_tone_durations
+        frame_idx = (stft_time_axis - center_time).abs().argmin()
+        peak_freq = stft_freq_axis[stft_magnitude[:, frame_idx].argmax()].item()
+        print(f"  t={center_time:.1f}s: expected {expected_freq:.0f} Hz, detected {peak_freq:.0f} Hz")
 
 
 if __name__ == "__main__":
