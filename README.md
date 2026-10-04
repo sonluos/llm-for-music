@@ -14,8 +14,11 @@ training-example data structure linking an instruction, audio features, and targ
 effect parameters (with JSON Lines save/load), a text-only baseline model (a small
 open-source LLM) that predicts an effect + parameters from a natural-language
 instruction, an audio-conditioned "proposed model" that embeds the source audio's
-features into the same LLM's prompt, and LoRA fine-tuning code for that proposed
-model. No reverb DSP is included yet.
+features into the same LLM's prompt, LoRA fine-tuning code for that proposed model,
+a Schroeder/Freeverb-style reverb module, and a dispatcher that applies a model's
+predicted effect dict (EQ or reverb) to real audio — closing the loop from
+instruction to processed sound. This is the full DSP + model foundation the
+project's research comparisons and further training will build on.
 
 ## Structure
 
@@ -45,6 +48,12 @@ src/llm_music/
                     # load_lora_adapter: LoRA (via peft) fine-tuning of a *separate*
                     # copy of the LLM on an llm_music.dataset JSON Lines dataset, with
                     # loss masked to the target_params tokens only
+    reverb.py       # apply_reverb: a Schroeder/Freeverb-style parallel-comb +
+                    # series-allpass reverberator (room_size, damping, decay, wet_dry),
+                    # each stage expressed as a closed-form IIR via torchaudio.lfilter
+    apply_effect.py # apply_predicted_effect: dispatches a schema-valid predicted
+                    # effect dict (from baseline_model/proposed_model) to the matching
+                    # llm_music.eq filter or llm_music.reverb.apply_reverb call
     convolution.py  # convolve (full 1D linear convolution) / moving_average_kernel /
                     # frequency_response (a filter's own magnitude response)
     eq.py           # biquad filter design (lowpass, highpass, peaking, low_shelf,
@@ -72,9 +81,12 @@ scripts/
                   # small synthetic training set (Korean instructions + target EQ params)
                   # saved/reloaded as JSON Lines; the baseline LLM's predicted effect
                   # params for those instructions; the proposed (audio-conditioned)
-                  # model's predictions for the same instructions; and a LoRA fine-tuning
+                  # model's predictions for the same instructions; a LoRA fine-tuning
                   # run on the dataset, comparing one instruction's prediction before vs.
-                  # after training
+                  # after training; the reverb module's impulse response at different
+                  # decay settings; and the fine-tuned model's (or, if not schema-valid,
+                  # the dataset target's) predicted effect applied to real audio and
+                  # saved as a WAV file
 tests/
     test_dsp.py         # sine length, FFT peak accuracy, save/load consistency
     test_convolution.py # convolution output length, impulse response, kernel normalization
@@ -92,6 +104,8 @@ tests/
                     # inference, plus a real-model integration test
     test_train_lora.py  # LoRA wrapping, training reduces loss, adapter save/load
                     # roundtrip — entirely `integration` (needs the real model)
+    test_reverb.py       # output shape/finiteness, wet/dry extremes, decay behavior
+    test_apply_effect.py # each effect type dispatches correctly, rejects invalid params
 data/
     input/        # place source audio here (demo also writes its preprocessing inputs here)
     output/       # generated audio and plots land here

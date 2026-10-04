@@ -17,6 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
 
+from llm_music.apply_effect import apply_predicted_effect
 from llm_music.audio_io import save_audio
 from llm_music.baseline_model import generate_with_model, predict_effect_params, validate_effect_params
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
@@ -28,6 +29,7 @@ from llm_music.pipeline import run_pipeline
 from llm_music.preprocess import preprocess_batch, resample
 from llm_music.proposed_model import predict_effect_params_with_audio
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
+from llm_music.reverb import apply_reverb
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 from llm_music.stft import compute_stft
@@ -463,6 +465,41 @@ def main() -> None:
     )
     print(f"  after fine-tuning:  {after_ft}")
     print(f"  target:             {demo_target}")
+
+    # --- Reverb module: impulse response, decay comparison ---
+    ir_length = SAMPLE_RATE * 2
+    impulse = torch.zeros(ir_length)
+    impulse[0] = 1.0
+    low_decay_ir = apply_reverb(impulse, SAMPLE_RATE, room_size=0.8, damping=0.3, decay=0.2, wet_dry=1.0)
+    high_decay_ir = apply_reverb(impulse, SAMPLE_RATE, room_size=0.8, damping=0.3, decay=0.95, wet_dry=1.0)
+
+    t_ir = torch.arange(ir_length, dtype=torch.float32) / SAMPLE_RATE
+    plt.figure(figsize=(10, 4))
+    plt.plot(t_ir, magnitude_to_db(low_decay_ir.abs()), label="decay=0.2", alpha=0.8)
+    plt.plot(t_ir, magnitude_to_db(high_decay_ir.abs()), label="decay=0.95", alpha=0.8)
+    plt.xlabel("Time (s)")
+    plt.ylabel("Magnitude (dB)")
+    plt.ylim(-120, 10)
+    plt.title("Reverb Impulse Response — Decay Comparison")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "reverb_impulse_response.png")
+    plt.close()
+    print(f"Saved reverb impulse response plot to {DATA_OUTPUT / 'reverb_impulse_response.png'}")
+
+    # --- Connect the reverb (and every EQ type) to the model's output: apply_predicted_effect ---
+    # If the fine-tuned model's own prediction isn't schema-valid, fall back to the
+    # (guaranteed-valid) dataset target so the full instruction -> params -> real
+    # audio loop is still demonstrated end to end.
+    effect_to_apply = after_ft if validate_effect_params(after_ft) else demo_target
+    print(f"Applying model-predicted effect to real audio: {effect_to_apply}")
+    processed_waveform = apply_predicted_effect(waveform, SAMPLE_RATE, effect_to_apply)
+    save_audio(DATA_OUTPUT / "model_processed_audio.wav", processed_waveform, SAMPLE_RATE)
+    print(f"Saved model-processed audio to {DATA_OUTPUT / 'model_processed_audio.wav'}")
+
+    reverb_demo = apply_reverb(waveform, SAMPLE_RATE, room_size=0.8, damping=0.3, decay=0.8, wet_dry=0.5)
+    save_audio(DATA_OUTPUT / "reverb_demo.wav", reverb_demo, SAMPLE_RATE)
+    print(f"Saved reverb demo audio to {DATA_OUTPUT / 'reverb_demo.wav'}")
 
 
 if __name__ == "__main__":

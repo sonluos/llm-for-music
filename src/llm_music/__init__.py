@@ -1,5 +1,6 @@
 """DSP foundation package for LLM-driven music production."""
 
+from llm_music.apply_effect import apply_predicted_effect
 from llm_music.audio_io import load_audio, save_audio
 from llm_music.baseline_model import (
     disable_sampling_generation_defaults,
@@ -40,6 +41,7 @@ from llm_music.preprocess import (
 )
 from llm_music.proposed_model import build_user_content, predict_effect_params_with_audio
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
+from llm_music.reverb import apply_reverb
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 from llm_music.stft import compute_stft
@@ -106,4 +108,6 @@ __all__ = [
     "train_one_epoch",
     "save_lora_adapter",
     "load_lora_adapter",
+    "apply_reverb",
+    "apply_predicted_effect",
 ]

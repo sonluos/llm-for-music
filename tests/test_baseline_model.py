@@ -60,7 +60,8 @@ def test_validate_effect_params_accepts_valid_lowpass() -> None:
 
 
 def test_validate_effect_params_accepts_valid_reverb() -> None:
-    assert validate_effect_params({"effect": "reverb", "room_size": 0.5, "wet_dry": 0.3}) is True
+    params = {"effect": "reverb", "room_size": 0.5, "damping": 0.3, "decay": 0.6, "wet_dry": 0.3}
+    assert validate_effect_params(params) is True
 
 
 def test_validate_effect_params_rejects_unknown_effect() -> None:
@@ -88,7 +89,14 @@ def test_validate_effect_params_rejects_zero_q() -> None:
 
 
 def test_validate_effect_params_rejects_out_of_range_reverb() -> None:
-    assert validate_effect_params({"effect": "reverb", "room_size": 1.5, "wet_dry": 0.3}) is False
+    params = {"effect": "reverb", "room_size": 1.5, "damping": 0.3, "decay": 0.6, "wet_dry": 0.3}
+    assert validate_effect_params(params) is False
+
+
+def test_validate_effect_params_rejects_reverb_missing_new_fields() -> None:
+    # The old 2-field reverb schema (room_size, wet_dry) is no longer complete;
+    # damping and decay are now required too.
+    assert validate_effect_params({"effect": "reverb", "room_size": 0.5, "wet_dry": 0.3}) is False
 
 
 def test_validate_effect_params_rejects_nan_field() -> None:

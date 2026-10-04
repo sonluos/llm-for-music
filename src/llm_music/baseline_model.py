@@ -17,15 +17,15 @@ import torch
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 
 # Required numeric fields for each supported effect. Mirrors llm_music.eq's
-# filter types, plus "reverb" as a parameter spec only (no DSP implementation
-# yet — that arrives with the reverb module).
+# filter types, plus "reverb", which llm_music.reverb implements as a
+# Schroeder/Freeverb-style parallel-comb + series-allpass reverberator.
 EFFECT_SCHEMAS: Dict[str, frozenset] = {
     "lowpass": frozenset({"freq_hz", "q"}),
     "highpass": frozenset({"freq_hz", "q"}),
     "peaking": frozenset({"freq_hz", "gain_db", "q"}),
     "low_shelf": frozenset({"freq_hz", "gain_db"}),
     "high_shelf": frozenset({"freq_hz", "gain_db"}),
-    "reverb": frozenset({"room_size", "wet_dry"}),
+    "reverb": frozenset({"room_size", "damping", "decay", "wet_dry"}),
 }
 
 SYSTEM_PROMPT = """You are a music production assistant. Given a user's instruction, output exactly ONE JSON object describing a single audio effect to apply. Output ONLY the JSON object, with no other text, no markdown, no code fences.
@@ -38,7 +38,7 @@ Use exactly the listed fields for the chosen effect:
 - {"effect": "peaking", "freq_hz": <number>, "gain_db": <number>, "q": <number>}
 - {"effect": "low_shelf", "freq_hz": <number>, "gain_db": <number>}
 - {"effect": "high_shelf", "freq_hz": <number>, "gain_db": <number>}
-- {"effect": "reverb", "room_size": <number 0-1>, "wet_dry": <number 0-1>}
+- {"effect": "reverb", "room_size": <number 0-1>, "damping": <number 0-1>, "decay": <number 0-1>, "wet_dry": <number 0-1>}
 
 Examples:
 User: make the bass louder
@@ -195,13 +195,15 @@ def extract_json(text: str) -> Dict[str, Any]:
 
 # Inclusive (min, max) bounds for each field's value, in the units used by the
 # prompt/schema. freq_hz is bounded to the audible range; q and gain_db to
-# typical parametric-EQ ranges; room_size/wet_dry to the 0-1 range the prompt
+# typical parametric-EQ ranges; the reverb fields to the 0-1 range the prompt
 # itself specifies.
 FIELD_RANGES: Dict[str, Tuple[float, float]] = {
     "freq_hz": (20.0, 20000.0),
     "q": (1e-6, 20.0),
     "gain_db": (-24.0, 24.0),
     "room_size": (0.0, 1.0),
+    "damping": (0.0, 1.0),
+    "decay": (0.0, 1.0),
     "wet_dry": (0.0, 1.0),
 }
 
