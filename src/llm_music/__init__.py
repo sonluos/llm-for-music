@@ -11,6 +11,7 @@ from llm_music.preprocess import (
     segment,
     to_mono,
 )
+from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
@@ -36,4 +37,7 @@ __all__ = [
     "normalize_rms",
     "segment",
     "preprocess_batch",
+    "quantize_bit_depth",
+    "signal_to_noise_ratio",
+    "theoretical_sqnr_db",
 ]

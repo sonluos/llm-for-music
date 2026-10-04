@@ -1,5 +1,6 @@
 """Demo: generate a two-tone signal, save audio + plots, report FFT peaks."""
 
+import math
 import sys
 from pathlib import Path
 
@@ -18,7 +19,8 @@ import torch
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
-from llm_music.preprocess import preprocess_batch
+from llm_music.preprocess import preprocess_batch, resample
+from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 
@@ -172,6 +174,92 @@ def main() -> None:
         f"Preprocessed batch shape: {tuple(batch.shape)} "
         f"(segments, segment_length) at {SAMPLE_RATE} Hz, peak-normalized to {batch.abs().max():.2f}"
     )
+
+    # --- Bit-depth quantization: measured SNR vs the theoretical SQNR formula ---
+    # The 6.02*bits+1.76 formula assumes a full-scale (0 dBFS) single sine wave;
+    # using a dedicated near-full-scale tone (rather than the 0.8-peak two-tone
+    # `waveform` above) lets the measured curve match theory directly.
+    quantization_test_tone = generate_sine(437.0, DURATION, SAMPLE_RATE, amplitude=0.99)
+    bit_depths = [16, 12, 10, 8, 6, 4, 2]
+    measured_snrs = []
+    theoretical_snrs = []
+    print("Bit-depth quantization quality (SQNR approx. 6.02*bits + 1.76 dB):")
+    for bits in bit_depths:
+        quantized = quantize_bit_depth(quantization_test_tone, bits)
+        measured = signal_to_noise_ratio(quantization_test_tone, quantized)
+        theoretical = theoretical_sqnr_db(bits)
+        measured_snrs.append(measured)
+        theoretical_snrs.append(theoretical)
+        print(f"  {bits:2d}-bit:  measured {measured:6.2f} dB   theoretical {theoretical:6.2f} dB")
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(bit_depths, measured_snrs, "o-", label="Measured SNR")
+    plt.plot(bit_depths, theoretical_snrs, "--", label="Theoretical SQNR (6.02·bits + 1.76)")
+    plt.xlabel("Bit depth")
+    plt.ylabel("SNR (dB)")
+    plt.title("Quantization Quality vs. Bit Depth")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "bit_depth_quality.png")
+    plt.close()
+
+    print(f"Saved bit-depth quality plot to {DATA_OUTPUT / 'bit_depth_quality.png'}")
+
+    # --- Sample-rate quality: downsample-then-restore round trip vs. original ---
+    round_trip_rates = [44100, 8000, 2000, 800]
+    rate_snrs = []
+    print("Sample-rate round-trip quality (downsample, then resample back to 44100 Hz):")
+    for target_sr in round_trip_rates:
+        downsampled = resample(waveform, SAMPLE_RATE, target_sr)
+        restored = resample(downsampled, target_sr, SAMPLE_RATE)
+        n = min(waveform.shape[-1], restored.shape[-1])
+        snr = signal_to_noise_ratio(waveform[:n], restored[:n])
+        rate_snrs.append(snr)
+        print(f"  {target_sr:6d} Hz:  SNR {snr:7.2f} dB")
+
+    # Drop infinite values (the no-op 44100 Hz case) so they don't break axis scaling;
+    # the printed table above already reports the identity case as "inf dB".
+    finite_rates = [r for r, s in zip(round_trip_rates, rate_snrs) if math.isfinite(s)]
+    finite_snrs = [s for s in rate_snrs if math.isfinite(s)]
+
+    plt.figure(figsize=(8, 5))
+    plt.semilogx(finite_rates, finite_snrs, "o-")
+    plt.xlabel("Intermediate sample rate (Hz, log scale)")
+    plt.ylabel("SNR (dB)")
+    plt.title("Round-Trip Resampling Quality vs. Sample Rate")
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "sample_rate_quality.png")
+    plt.close()
+
+    print(f"Saved sample-rate quality plot to {DATA_OUTPUT / 'sample_rate_quality.png'}")
+
+    # Spectral comparison at the most aggressive sample rate: both 440/1000 Hz tones
+    # fall above the 400 Hz Nyquist limit of an 800 Hz intermediate rate and should
+    # alias/disappear after the round trip.
+    worst_sr = round_trip_rates[-1]
+    worst_restored = resample(resample(waveform, SAMPLE_RATE, worst_sr), worst_sr, SAMPLE_RATE)
+    n = min(waveform.shape[-1], worst_restored.shape[-1])
+    freqs_before, magnitude_before = compute_fft(waveform[:n], SAMPLE_RATE)
+    freqs_after, magnitude_after = compute_fft(worst_restored[:n], SAMPLE_RATE)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(freqs_before, magnitude_to_db(magnitude_before), label="Original (44100 Hz)")
+    plt.plot(
+        freqs_after,
+        magnitude_to_db(magnitude_after),
+        label=f"After {worst_sr} Hz round trip",
+        alpha=0.8,
+    )
+    plt.xlim(0, 5000)
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title(f"Spectral Loss from {worst_sr} Hz Round-Trip Resampling")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "sample_rate_spectral_loss.png")
+    plt.close()
+
+    print(f"Saved sample-rate spectral loss plot to {DATA_OUTPUT / 'sample_rate_spectral_loss.png'}")
 
 
 if __name__ == "__main__":
