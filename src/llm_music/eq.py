@@ -5,7 +5,7 @@ returns (b, a) difference-equation coefficients for use with apply_biquad.
 """
 
 import math
-from typing import Tuple
+from typing import Sequence, Tuple
 
 import torch
 import torchaudio.functional as AF
@@ -198,3 +198,27 @@ def apply_biquad(signal: torch.Tensor, b: torch.Tensor, a: torch.Tensor) -> torc
     b = b.to(dtype=signal.dtype, device=signal.device)
     a = a.to(dtype=signal.dtype, device=signal.device)
     return AF.lfilter(signal, a, b, clamp=False)
+
+
+def apply_eq_chain(
+    signal: torch.Tensor, filters: Sequence[Tuple[torch.Tensor, torch.Tensor]]
+) -> torch.Tensor:
+    """Apply a sequence of biquad filters to a signal, each feeding into the next.
+
+    Models a real parametric EQ, which is usually several bands (e.g. a
+    high-pass plus a couple of peaking bands) applied in series rather than
+    a single filter.
+
+    Args:
+        signal: 1D tensor of shape (samples,).
+        filters: Sequence of (b, a) coefficient pairs, each as returned by one
+            of this module's design functions (lowpass, highpass, peaking,
+            low_shelf, high_shelf). Applied in list order. An empty sequence
+            leaves the signal unchanged.
+
+    Returns:
+        1D tensor of shape (samples,), the signal after the full chain.
+    """
+    for b, a in filters:
+        signal = apply_biquad(signal, b, a)
+    return signal

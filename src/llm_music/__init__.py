@@ -2,7 +2,16 @@
 
 from llm_music.audio_io import load_audio, save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
-from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
+from llm_music.eq import (
+    apply_biquad,
+    apply_eq_chain,
+    high_shelf,
+    highpass,
+    low_shelf,
+    lowpass,
+    peaking,
+)
+from llm_music.pipeline import PipelineResult, run_pipeline
 from llm_music.preprocess import (
     normalize_peak,
     normalize_rms,
@@ -31,6 +40,7 @@ __all__ = [
     "low_shelf",
     "high_shelf",
     "apply_biquad",
+    "apply_eq_chain",
     "resample",
     "to_mono",
     "normalize_peak",
@@ -40,4 +50,6 @@ __all__ = [
     "quantize_bit_depth",
     "signal_to_noise_ratio",
     "theoretical_sqnr_db",
+    "run_pipeline",
+    "PipelineResult",
 ]

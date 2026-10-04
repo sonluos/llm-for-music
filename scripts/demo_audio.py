@@ -19,6 +19,7 @@ import torch
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
+from llm_music.pipeline import run_pipeline
 from llm_music.preprocess import preprocess_batch, resample
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
@@ -260,6 +261,42 @@ def main() -> None:
     plt.close()
 
     print(f"Saved sample-rate spectral loss plot to {DATA_OUTPUT / 'sample_rate_spectral_loss.png'}")
+
+    # --- Integrated pipeline: preprocessing -> EQ chain -> RMS readout, in one call ---
+    # Reuses the two input files from the preprocessing section above (different
+    # sample rates and loudness), now run through an EQ chain (high-pass to remove
+    # rumble, then a peaking boost) with before/after level measurement.
+    eq_chain = [
+        highpass(100.0, 0.7071, SAMPLE_RATE),
+        peaking(1000.0, 6.0, 1.0, SAMPLE_RATE),
+    ]
+    pipeline_result = run_pipeline(
+        [quiet_path, loud_path], SAMPLE_RATE, segment_length=segment_length, eq_chain=eq_chain
+    )
+
+    print("Integrated pipeline (preprocess -> EQ chain -> RMS):")
+    for i, (before, after) in enumerate(zip(pipeline_result.rms_before, pipeline_result.rms_after)):
+        print(f"  segment {i}: RMS before {before:.4f} -> after {after:.4f}")
+
+    segment_indices = range(pipeline_result.rms_before.shape[0])
+    width = 0.35
+    plt.figure(figsize=(8, 5))
+    plt.bar(
+        [i - width / 2 for i in segment_indices], pipeline_result.rms_before, width, label="Before EQ"
+    )
+    plt.bar(
+        [i + width / 2 for i in segment_indices], pipeline_result.rms_after, width, label="After EQ"
+    )
+    plt.xlabel("Segment index")
+    plt.ylabel("RMS level")
+    plt.title("Integrated Pipeline — RMS Before/After EQ Chain")
+    plt.xticks(list(segment_indices))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "pipeline_rms_comparison.png")
+    plt.close()
+
+    print(f"Saved pipeline RMS comparison plot to {DATA_OUTPUT / 'pipeline_rms_comparison.png'}")
 
 
 if __name__ == "__main__":
