@@ -11,9 +11,11 @@ loss), an integrated preprocessing-to-EQ execution pipeline, a basic audio featu
 extraction module (RMS, spectral centroid, spectral rolloff, band energy),
 normalization/formatting of those features into an LLM-prompt-ready JSON string, a
 training-example data structure linking an instruction, audio features, and target
-effect parameters (with JSON Lines save/load), and a text-only baseline model (a small
+effect parameters (with JSON Lines save/load), a text-only baseline model (a small
 open-source LLM) that predicts an effect + parameters from a natural-language
-instruction. No reverb DSP or audio-conditioned ("proposed") model is included yet.
+instruction, an audio-conditioned "proposed model" that embeds the source audio's
+features into the same LLM's prompt, and LoRA fine-tuning code for that proposed
+model. No reverb DSP is included yet.
 
 ## Structure
 
@@ -31,7 +33,18 @@ src/llm_music/
                     # effect params into one record; save_dataset / load_dataset (JSONL)
     baseline_model.py # predict_effect_params: text-only instruction -> JSON effect
                     # params via a small instruction-tuned LLM (Qwen2.5-0.5B-Instruct,
-                    # lazily loaded); validate_effect_params checks schema conformance
+                    # lazily loaded); validate_effect_params checks schema conformance;
+                    # generate_with_model/generate_from_user_content/
+                    # get_model_and_tokenizer expose the model for reuse by
+                    # proposed_model.py and train_lora.py
+    proposed_model.py # predict_effect_params_with_audio: instruction + source audio's
+                    # features (as JSON in the prompt) -> JSON effect params, using the
+                    # same LLM/schema as baseline_model (prompt-level fusion, not a
+                    # learned embedding-space projection)
+    train_lora.py   # build_lora_model / train_one_epoch / save_lora_adapter /
+                    # load_lora_adapter: LoRA (via peft) fine-tuning of a *separate*
+                    # copy of the LLM on an llm_music.dataset JSON Lines dataset, with
+                    # loss masked to the target_params tokens only
     convolution.py  # convolve (full 1D linear convolution) / moving_average_kernel /
                     # frequency_response (a filter's own magnitude response)
     eq.py           # biquad filter design (lowpass, highpass, peaking, low_shelf,
@@ -57,8 +70,11 @@ scripts/
                   # centroid/rolloff/band energy compared across two tones; each tone's
                   # normalized features formatted as an LLM-prompt-ready JSON string; a
                   # small synthetic training set (Korean instructions + target EQ params)
-                  # saved/reloaded as JSON Lines; and the baseline LLM's predicted effect
-                  # params for those same instructions, compared against the targets
+                  # saved/reloaded as JSON Lines; the baseline LLM's predicted effect
+                  # params for those instructions; the proposed (audio-conditioned)
+                  # model's predictions for the same instructions; and a LoRA fine-tuning
+                  # run on the dataset, comparing one instruction's prediction before vs.
+                  # after training
 tests/
     test_dsp.py         # sine length, FFT peak accuracy, save/load consistency
     test_convolution.py # convolution output length, impulse response, kernel normalization
@@ -72,6 +88,10 @@ tests/
     test_dataset.py      # example structure/validation, JSONL save/load roundtrip, Korean text I/O
     test_baseline_model.py # JSON extraction/validation (fake generate_fn, no model load),
                     # plus real-model integration tests that load the actual baseline LLM
+    test_proposed_model.py # audio+instruction prompt construction, fake-generate_fn
+                    # inference, plus a real-model integration test
+    test_train_lora.py  # LoRA wrapping, training reduces loss, adapter save/load
+                    # roundtrip — entirely `integration` (needs the real model)
 data/
     input/        # place source audio here (demo also writes its preprocessing inputs here)
     output/       # generated audio and plots land here

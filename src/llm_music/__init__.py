@@ -2,8 +2,12 @@
 
 from llm_music.audio_io import load_audio, save_audio
 from llm_music.baseline_model import (
+    disable_sampling_generation_defaults,
     extract_json,
+    generate_from_user_content,
     generate_raw_response,
+    generate_with_model,
+    get_model_and_tokenizer,
     predict_effect_params,
     validate_effect_params,
 )
@@ -34,10 +38,18 @@ from llm_music.preprocess import (
     segment,
     to_mono,
 )
+from llm_music.proposed_model import build_user_content, predict_effect_params_with_audio
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 from llm_music.stft import compute_stft
+from llm_music.train_lora import (
+    build_lora_model,
+    build_optimizer,
+    load_lora_adapter,
+    save_lora_adapter,
+    train_one_epoch,
+)
 
 __all__ = [
     "load_audio",
@@ -82,5 +94,16 @@ __all__ = [
     "predict_effect_params",
     "validate_effect_params",
     "generate_raw_response",
+    "generate_from_user_content",
+    "generate_with_model",
+    "get_model_and_tokenizer",
+    "disable_sampling_generation_defaults",
     "extract_json",
+    "build_user_content",
+    "predict_effect_params_with_audio",
+    "build_lora_model",
+    "build_optimizer",
+    "train_one_epoch",
+    "save_lora_adapter",
+    "load_lora_adapter",
 ]

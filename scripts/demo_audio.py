@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from llm_music.audio_io import save_audio
-from llm_music.baseline_model import predict_effect_params, validate_effect_params
+from llm_music.baseline_model import generate_with_model, predict_effect_params, validate_effect_params
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
@@ -26,10 +26,12 @@ from llm_music.features import band_energy, compute_rms, spectral_centroid, spec
 from llm_music.llm_input import audio_to_llm_input
 from llm_music.pipeline import run_pipeline
 from llm_music.preprocess import preprocess_batch, resample
+from llm_music.proposed_model import predict_effect_params_with_audio
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
 from llm_music.signals import generate_multitone, generate_sine
 from llm_music.spectrum import compute_fft, magnitude_to_db
 from llm_music.stft import compute_stft
+from llm_music.train_lora import build_lora_model, build_optimizer, train_one_epoch
 
 SAMPLE_RATE = 44100
 DURATION = 2.0
@@ -419,6 +421,48 @@ def main() -> None:
         print(f"  instruction: {instruction}")
         print(f"    target:    {target_params}")
         print(f"    predicted: {predicted}  (schema-valid: {is_valid})")
+
+    # --- Proposed model: instruction + audio features -> predicted effect params ---
+    # Same instructions and same underlying LLM as the baseline above, but now the
+    # prompt also embeds the source audio's features (llm_music.llm_input).
+    print("Proposed model predictions (instruction + audio features):")
+    for instruction, target_params in presets:
+        predicted = predict_effect_params_with_audio(instruction, waveform, SAMPLE_RATE)
+        is_valid = validate_effect_params(predicted)
+        print(f"  instruction: {instruction}")
+        print(f"    target:    {target_params}")
+        print(f"    predicted: {predicted}  (schema-valid: {is_valid})")
+
+    # --- LoRA fine-tuning: train the proposed model's LLM on the small dataset ---
+    # Loads a *separate* copy of the LLM (never the shared baseline instance), so
+    # training never affects the baseline/proposed predictions printed above.
+    print("LoRA fine-tuning on the 3 dataset examples:")
+    peft_model, peft_tokenizer = build_lora_model()
+
+    demo_instruction, demo_target = presets[0]
+    before_ft = predict_effect_params_with_audio(
+        demo_instruction,
+        waveform,
+        SAMPLE_RATE,
+        generate_fn=lambda content: generate_with_model(content, peft_model, peft_tokenizer),
+    )
+    print(f"  before fine-tuning: {before_ft}")
+
+    # One optimizer built up front and reused across epochs: Adam's per-parameter
+    # momentum/variance state needs to persist across calls, not reset each epoch.
+    optimizer = build_optimizer(peft_model)
+    for epoch in range(5):
+        losses = train_one_epoch(peft_model, peft_tokenizer, dataset_examples, optimizer)
+        print(f"  epoch {epoch}: losses = {[round(loss, 4) for loss in losses]}")
+
+    after_ft = predict_effect_params_with_audio(
+        demo_instruction,
+        waveform,
+        SAMPLE_RATE,
+        generate_fn=lambda content: generate_with_model(content, peft_model, peft_tokenizer),
+    )
+    print(f"  after fine-tuning:  {after_ft}")
+    print(f"  target:             {demo_target}")
 
 
 if __name__ == "__main__":

@@ -4,3 +4,4 @@ soundfile
 matplotlib
 pytest
 transformers
+peft
