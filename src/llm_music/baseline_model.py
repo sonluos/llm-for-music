@@ -87,7 +87,13 @@ def get_model_and_tokenizer():
     return _model, _tokenizer
 
 
-def generate_with_model(user_content: str, model, tokenizer, max_new_tokens: int = 128) -> str:
+def generate_with_model(
+    user_content: str,
+    model,
+    tokenizer,
+    max_new_tokens: int = 128,
+    temperature: Optional[float] = None,
+) -> str:
     """Run a given model/tokenizer on a user message and return its raw text response.
 
     Lower-level than generate_raw_response: takes the model and tokenizer
@@ -100,9 +106,14 @@ def generate_with_model(user_content: str, model, tokenizer, max_new_tokens: int
         model: A causal LM compatible with `.generate()`.
         tokenizer: The matching tokenizer, with a chat template.
         max_new_tokens: Maximum tokens to generate.
+        temperature: If None (the default), decode greedily — deterministic,
+            same output every call. If given, sample with this temperature
+            instead; repeated calls then vary, which is the point of
+            llm_music.evaluate.repetition_stability (measuring how consistent
+            the model's choices are across repeated attempts).
 
     Returns:
-        The model's decoded response text (greedy decoding, deterministic).
+        The model's decoded response text.
     """
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -114,7 +125,8 @@ def generate_with_model(user_content: str, model, tokenizer, max_new_tokens: int
         output_ids = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=False,
+            do_sample=temperature is not None,
+            temperature=temperature,
             pad_token_id=tokenizer.eos_token_id,
         )
     generated = output_ids[0][inputs["input_ids"].shape[-1] :]

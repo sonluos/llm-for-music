@@ -23,6 +23,12 @@ from llm_music.eq import (
     lowpass,
     peaking,
 )
+from llm_music.evaluate import (
+    acoustic_feature_change,
+    evaluate_predictions,
+    parameter_error,
+    repetition_stability,
+)
 from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
 from llm_music.llm_input import (
     audio_to_llm_input,
@@ -110,4 +116,8 @@ __all__ = [
     "load_lora_adapter",
     "apply_reverb",
     "apply_predicted_effect",
+    "parameter_error",
+    "evaluate_predictions",
+    "repetition_stability",
+    "acoustic_feature_change",
 ]

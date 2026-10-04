@@ -19,10 +19,20 @@ import torch
 
 from llm_music.apply_effect import apply_predicted_effect
 from llm_music.audio_io import save_audio
-from llm_music.baseline_model import generate_with_model, predict_effect_params, validate_effect_params
+from llm_music.baseline_model import (
+    generate_with_model,
+    get_model_and_tokenizer,
+    predict_effect_params,
+    validate_effect_params,
+)
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
+from llm_music.evaluate import (
+    acoustic_feature_change,
+    evaluate_predictions,
+    repetition_stability,
+)
 from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
 from llm_music.llm_input import audio_to_llm_input
 from llm_music.pipeline import run_pipeline
@@ -417,8 +427,10 @@ def main() -> None:
     # instructions used to build the dataset above, for a qualitative look at
     # target vs. predicted params ahead of any formal evaluation.
     print("Baseline model predictions (text-only LLM, no audio conditioning):")
+    baseline_predictions = []
     for instruction, target_params in presets:
         predicted = predict_effect_params(instruction)
+        baseline_predictions.append(predicted)
         is_valid = validate_effect_params(predicted)
         print(f"  instruction: {instruction}")
         print(f"    target:    {target_params}")
@@ -428,12 +440,52 @@ def main() -> None:
     # Same instructions and same underlying LLM as the baseline above, but now the
     # prompt also embeds the source audio's features (llm_music.llm_input).
     print("Proposed model predictions (instruction + audio features):")
+    proposed_predictions = []
     for instruction, target_params in presets:
         predicted = predict_effect_params_with_audio(instruction, waveform, SAMPLE_RATE)
+        proposed_predictions.append(predicted)
         is_valid = validate_effect_params(predicted)
         print(f"  instruction: {instruction}")
         print(f"    target:    {target_params}")
         print(f"    predicted: {predicted}  (schema-valid: {is_valid})")
+
+    # --- Evaluation: baseline vs. proposed, over the same instructions/targets ---
+    targets_only = [target_params for _, target_params in presets]
+    baseline_eval = evaluate_predictions(baseline_predictions, targets_only)
+    proposed_eval = evaluate_predictions(proposed_predictions, targets_only)
+    print("Baseline vs. proposed evaluation (valid output ratio / effect match / mean param error):")
+    print(
+        f"  baseline: valid={baseline_eval['valid_output_ratio']:.2f}  "
+        f"effect_match={baseline_eval['effect_match_ratio']:.2f}  "
+        f"mean_error={baseline_eval['mean_parameter_error']}"
+    )
+    print(
+        f"  proposed: valid={proposed_eval['valid_output_ratio']:.2f}  "
+        f"effect_match={proposed_eval['effect_match_ratio']:.2f}  "
+        f"mean_error={proposed_eval['mean_parameter_error']}"
+    )
+
+    # --- Repetition stability: sample the proposed model N times on one instruction ---
+    stability_instruction, _ = presets[0]
+    repeated_predictions = []
+    for _ in range(5):
+        try:
+            repeated_predictions.append(
+                predict_effect_params_with_audio(
+                    stability_instruction,
+                    waveform,
+                    SAMPLE_RATE,
+                    generate_fn=lambda content: generate_with_model(
+                        content, *get_model_and_tokenizer(), temperature=0.9
+                    ),
+                )
+            )
+        except ValueError:
+            repeated_predictions.append({})  # unparseable output counts against agreement
+    stability = repetition_stability(repeated_predictions)
+    print(f"Repetition stability over 5 sampled trials on '{stability_instruction}':")
+    print(f"  effect_agreement_ratio={stability['effect_agreement_ratio']:.2f}")
+    print(f"  mean_param_spread={stability['mean_param_spread']}")
 
     # --- LoRA fine-tuning: train the proposed model's LLM on the small dataset ---
     # Loads a *separate* copy of the LLM (never the shared baseline instance), so
@@ -496,6 +548,14 @@ def main() -> None:
     processed_waveform = apply_predicted_effect(waveform, SAMPLE_RATE, effect_to_apply)
     save_audio(DATA_OUTPUT / "model_processed_audio.wav", processed_waveform, SAMPLE_RATE)
     print(f"Saved model-processed audio to {DATA_OUTPUT / 'model_processed_audio.wav'}")
+
+    feature_change = acoustic_feature_change(waveform, processed_waveform, SAMPLE_RATE)
+    print("Acoustic feature change from applying that effect:")
+    for name in ("rms", "spectral_centroid_hz", "spectral_rolloff_hz"):
+        print(
+            f"  {name}: {feature_change[f'{name}_before']:.4f} -> "
+            f"{feature_change[f'{name}_after']:.4f}  (delta {feature_change[f'{name}_delta']:+.4f})"
+        )
 
     reverb_demo = apply_reverb(waveform, SAMPLE_RATE, room_size=0.8, damping=0.3, decay=0.8, wet_dry=0.5)
     save_audio(DATA_OUTPUT / "reverb_demo.wav", reverb_demo, SAMPLE_RATE)
