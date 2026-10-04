@@ -5,6 +5,7 @@ import torch
 from llm_music.audio_io import save_audio
 from llm_music.eq import apply_biquad, apply_eq_chain, highpass, lowpass
 from llm_music.pipeline import run_pipeline
+from llm_music.preprocess import segment
 from llm_music.signals import generate_sine
 
 SAMPLE_RATE = 44100
@@ -66,3 +67,34 @@ def test_run_pipeline_lowpass_reduces_rms_of_high_frequency_tone(tmp_path) -> No
     result = run_pipeline([path], SAMPLE_RATE, segment_length=SAMPLE_RATE // 2, eq_chain=eq_chain)
 
     assert torch.all(result.rms_after < 0.1 * result.rms_before)
+
+
+def test_run_pipeline_filters_continuously_across_segment_boundaries(tmp_path) -> None:
+    # EQ must run on the full waveform before segmenting, not per-segment:
+    # filtering each segment independently would reset the IIR filter's state
+    # at every boundary, producing a transient that continuous filtering would
+    # not have. Reproduce the reference (continuous) result by hand and compare.
+    path = tmp_path / "tone.wav"
+    waveform = generate_sine(300.0, 1.0, SAMPLE_RATE, amplitude=0.8)
+    save_audio(path, waveform, SAMPLE_RATE)
+
+    segment_length = SAMPLE_RATE // 4
+    eq_chain = [lowpass(1000.0, 0.7071, SAMPLE_RATE)]
+    # target_peak=None: skip normalization so the pipeline's internal waveform
+    # matches `waveform` below exactly, keeping the comparison simple.
+    result = run_pipeline([path], SAMPLE_RATE, segment_length, eq_chain, target_peak=None)
+
+    continuously_filtered = apply_eq_chain(waveform, eq_chain)
+    expected_segments = segment(continuously_filtered, segment_length)
+
+    assert torch.allclose(result.processed_segments, expected_segments, atol=1e-4)
+
+    # If each segment were filtered independently (resetting the IIR filter's
+    # state at every boundary), the first sample of every non-initial segment
+    # would instead be near zero; demonstrate the fix actually changes that.
+    reset_per_segment = torch.stack(
+        [apply_eq_chain(s, eq_chain) for s in segment(waveform, segment_length)]
+    )
+    boundary_outputs = result.processed_segments[1:, 0]
+    reset_boundary_outputs = reset_per_segment[1:, 0]
+    assert torch.all((boundary_outputs - reset_boundary_outputs).abs() > 0.1)
