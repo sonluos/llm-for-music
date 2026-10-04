@@ -7,8 +7,9 @@ audio I/O, synthetic test signal generation, FFT-based spectral analysis, short-
 Fourier transform/spectrograms, 1D convolution/filtering, parametric EQ (biquad IIR
 filters, applied individually or as a chain), a batch audio preprocessing pipeline,
 analog-vs-digital quality tradeoffs (bit-depth quantization, sample-rate round-trip
-loss), and an integrated preprocessing-to-EQ execution pipeline. No LLM, reverb, or
-full feature-extraction module is included yet.
+loss), an integrated preprocessing-to-EQ execution pipeline, and a basic audio feature
+extraction module (RMS, spectral centroid, spectral rolloff, band energy). No LLM or
+reverb logic is included yet.
 
 ## Structure
 
@@ -19,6 +20,7 @@ src/llm_music/
     spectrum.py     # compute_fft / magnitude_to_db
     stft.py         # compute_stft: framed, windowed, time-varying spectrum
                     # (spectrogram), built on preprocess.segment + torch.fft.rfft
+    features.py     # compute_rms, spectral_centroid, spectral_rolloff, band_energy
     convolution.py  # convolve (full 1D linear convolution) / moving_average_kernel /
                     # frequency_response (a filter's own magnitude response)
     eq.py           # biquad filter design (lowpass, highpass, peaking, low_shelf,
@@ -39,8 +41,9 @@ scripts/
                   # batch preprocessing run over two files with different sample rates
                   # and loudness; bit-depth quantization quality vs. the theoretical SQNR
                   # formula; sample-rate round-trip quality/spectral loss; the integrated
-                  # pipeline's RMS before/after an EQ chain; and a spectrogram of a tone
-                  # that changes frequency over time (440 -> 1000 -> 4000 Hz)
+                  # pipeline's RMS before/after an EQ chain; a spectrogram of a tone that
+                  # changes frequency over time (440 -> 1000 -> 4000 Hz); and RMS/spectral
+                  # centroid/rolloff/band energy compared across two tones
 tests/
     test_dsp.py         # sine length, FFT peak accuracy, save/load consistency
     test_convolution.py # convolution output length, impulse response, kernel normalization
@@ -49,6 +52,7 @@ tests/
     test_quantize.py    # quantization level limits, SNR metric, measured vs. theoretical SQNR
     test_pipeline.py    # EQ chain ordering/passthrough, integrated pipeline shapes/RMS/IIR continuity
     test_stft.py        # STFT shapes, validation, and tracking stationary/changing tone frequency
+    test_features.py    # RMS/centroid/rolloff against known tones, band energy concentration/coverage
 data/
     input/        # place source audio here (demo also writes its preprocessing inputs here)
     output/       # generated audio and plots land here

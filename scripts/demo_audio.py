@@ -19,6 +19,7 @@ import torch
 from llm_music.audio_io import save_audio
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
+from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
 from llm_music.pipeline import run_pipeline
 from llm_music.preprocess import preprocess_batch, resample
 from llm_music.quantize import quantize_bit_depth, signal_to_noise_ratio, theoretical_sqnr_db
@@ -341,6 +342,38 @@ def main() -> None:
         frame_idx = (stft_time_axis - center_time).abs().argmin()
         peak_freq = stft_freq_axis[stft_magnitude[:, frame_idx].argmax()].item()
         print(f"  t={center_time:.1f}s: expected {expected_freq:.0f} Hz, detected {peak_freq:.0f} Hz")
+
+    # --- Feature extraction: RMS, spectral centroid, spectral rolloff, band energy ---
+    # Compare the demo's two-tone signal (440 + 1000 Hz) against the filter demo's
+    # signal (440 + 4000 Hz), which has more high-frequency content and should read
+    # as "brighter" (higher centroid/rolloff).
+    print("Feature extraction:")
+    for name, sig in [("440+1000 Hz tone", waveform), ("440+4000 Hz tone", filter_waveform)]:
+        rms = compute_rms(sig).item()
+        centroid = spectral_centroid(sig, SAMPLE_RATE)
+        rolloff = spectral_rolloff(sig, SAMPLE_RATE, rolloff_percent=0.85)
+        print(
+            f"  {name:18s}: RMS {rms:.4f}  centroid {centroid:8.1f} Hz  rolloff(85%) {rolloff:8.1f} Hz"
+        )
+
+    bands = [(0.0, 1000.0), (1000.0, 3000.0), (3000.0, 8000.0)]
+    band_labels = [f"{int(lo)}-{int(hi)} Hz" for lo, hi in bands]
+    energies = band_energy(filter_waveform, SAMPLE_RATE, bands)
+    print("  440+4000 Hz tone band energy:")
+    for label, e in zip(band_labels, energies):
+        print(f"    {label:12s}: {e.item():.2f}")
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(band_labels, energies)
+    plt.yscale("log")
+    plt.xlabel("Frequency band")
+    plt.ylabel("Energy (log scale)")
+    plt.title("Band Energy — 440 Hz + 4000 Hz Tone")
+    plt.tight_layout()
+    plt.savefig(DATA_OUTPUT / "band_energy.png")
+    plt.close()
+
+    print(f"Saved band energy plot to {DATA_OUTPUT / 'band_energy.png'}")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from llm_music.eq import (
     lowpass,
     peaking,
 )
+from llm_music.features import band_energy, compute_rms, spectral_centroid, spectral_rolloff
 from llm_music.pipeline import PipelineResult, run_pipeline
 from llm_music.preprocess import (
     normalize_peak,
@@ -54,4 +55,8 @@ __all__ = [
     "run_pipeline",
     "PipelineResult",
     "compute_stft",
+    "compute_rms",
+    "spectral_centroid",
+    "spectral_rolloff",
+    "band_energy",
 ]

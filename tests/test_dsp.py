@@ -1,5 +1,6 @@
 """Tests for the DSP foundation: signal generation, FFT, and audio I/O."""
 
+import pytest
 import torch
 
 from llm_music.audio_io import load_audio, save_audio
@@ -31,6 +32,12 @@ def test_fft_peaks_for_demo_multitone() -> None:
 
     assert torch.any(torch.abs(peak_freqs - 440.0) < 1.0)
     assert torch.any(torch.abs(peak_freqs - 1000.0) < 1.0)
+
+
+@pytest.mark.parametrize("sample_rate", [0, -44100])
+def test_fft_rejects_non_positive_sample_rate(sample_rate: int) -> None:
+    with pytest.raises(ValueError):
+        compute_fft(torch.randn(1000), sample_rate)
 
 
 def test_save_load_consistency(tmp_path) -> None:

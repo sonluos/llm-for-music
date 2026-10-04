@@ -20,10 +20,12 @@ def compute_fft(waveform: torch.Tensor, sample_rate: int) -> Tuple[torch.Tensor,
         waveform = waveform.mean(dim=0)
     elif waveform.dim() != 1:
         raise ValueError(f"Expected 1D or 2D waveform, got shape {tuple(waveform.shape)}")
+    if sample_rate <= 0:
+        raise ValueError(f"sample_rate must be > 0, got {sample_rate}")
 
     num_samples = waveform.shape[-1]
     spectrum = torch.fft.rfft(waveform)
-    freqs = torch.fft.rfftfreq(num_samples, d=1.0 / sample_rate)
+    freqs = torch.fft.rfftfreq(num_samples, d=1.0 / sample_rate, device=waveform.device)
     magnitude = spectrum.abs()
     return freqs, magnitude
 
