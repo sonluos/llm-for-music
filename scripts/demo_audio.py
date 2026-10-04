@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from llm_music.audio_io import save_audio
+from llm_music.baseline_model import predict_effect_params, validate_effect_params
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import apply_biquad, high_shelf, highpass, low_shelf, lowpass, peaking
@@ -406,6 +407,18 @@ def main() -> None:
     loaded_examples = load_dataset(dataset_path)
     print("Loaded example 0:")
     print(json.dumps(loaded_examples[0], ensure_ascii=False, indent=2))
+
+    # --- Baseline model: natural-language instruction -> predicted effect params ---
+    # Runs the actual small LLM (text-only, no audio conditioning) on the same
+    # instructions used to build the dataset above, for a qualitative look at
+    # target vs. predicted params ahead of any formal evaluation.
+    print("Baseline model predictions (text-only LLM, no audio conditioning):")
+    for instruction, target_params in presets:
+        predicted = predict_effect_params(instruction)
+        is_valid = validate_effect_params(predicted)
+        print(f"  instruction: {instruction}")
+        print(f"    target:    {target_params}")
+        print(f"    predicted: {predicted}  (schema-valid: {is_valid})")
 
 
 if __name__ == "__main__":

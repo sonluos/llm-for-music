@@ -1,6 +1,12 @@
 """DSP foundation package for LLM-driven music production."""
 
 from llm_music.audio_io import load_audio, save_audio
+from llm_music.baseline_model import (
+    extract_json,
+    generate_raw_response,
+    predict_effect_params,
+    validate_effect_params,
+)
 from llm_music.convolution import convolve, frequency_response, moving_average_kernel
 from llm_music.dataset import build_example, load_dataset, save_dataset
 from llm_music.eq import (
@@ -73,4 +79,8 @@ __all__ = [
     "build_example",
     "save_dataset",
     "load_dataset",
+    "predict_effect_params",
+    "validate_effect_params",
+    "generate_raw_response",
+    "extract_json",
 ]

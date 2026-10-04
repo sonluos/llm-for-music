@@ -9,10 +9,11 @@ filters, applied individually or as a chain), a batch audio preprocessing pipeli
 analog-vs-digital quality tradeoffs (bit-depth quantization, sample-rate round-trip
 loss), an integrated preprocessing-to-EQ execution pipeline, a basic audio feature
 extraction module (RMS, spectral centroid, spectral rolloff, band energy),
-normalization/formatting of those features into an LLM-prompt-ready JSON string, and
-a training-example data structure linking an instruction, audio features, and target
-effect parameters (with JSON Lines save/load). No actual LLM call or reverb logic is
-included yet.
+normalization/formatting of those features into an LLM-prompt-ready JSON string, a
+training-example data structure linking an instruction, audio features, and target
+effect parameters (with JSON Lines save/load), and a text-only baseline model (a small
+open-source LLM) that predicts an effect + parameters from a natural-language
+instruction. No reverb DSP or audio-conditioned ("proposed") model is included yet.
 
 ## Structure
 
@@ -28,6 +29,9 @@ src/llm_music/
                     # and audio_to_llm_input tying them into one call (a JSON string)
     dataset.py      # build_example: links an instruction + audio features + target
                     # effect params into one record; save_dataset / load_dataset (JSONL)
+    baseline_model.py # predict_effect_params: text-only instruction -> JSON effect
+                    # params via a small instruction-tuned LLM (Qwen2.5-0.5B-Instruct,
+                    # lazily loaded); validate_effect_params checks schema conformance
     convolution.py  # convolve (full 1D linear convolution) / moving_average_kernel /
                     # frequency_response (a filter's own magnitude response)
     eq.py           # biquad filter design (lowpass, highpass, peaking, low_shelf,
@@ -51,9 +55,10 @@ scripts/
                   # pipeline's RMS before/after an EQ chain; a spectrogram of a tone that
                   # changes frequency over time (440 -> 1000 -> 4000 Hz); RMS/spectral
                   # centroid/rolloff/band energy compared across two tones; each tone's
-                  # normalized features formatted as an LLM-prompt-ready JSON string; and
-                  # a small synthetic training set (Korean instructions + target EQ
-                  # params) saved/reloaded as JSON Lines
+                  # normalized features formatted as an LLM-prompt-ready JSON string; a
+                  # small synthetic training set (Korean instructions + target EQ params)
+                  # saved/reloaded as JSON Lines; and the baseline LLM's predicted effect
+                  # params for those same instructions, compared against the targets
 tests/
     test_dsp.py         # sine length, FFT peak accuracy, save/load consistency
     test_convolution.py # convolution output length, impulse response, kernel normalization
@@ -65,6 +70,8 @@ tests/
     test_features.py    # RMS/centroid/rolloff against known tones, band energy concentration/coverage
     test_llm_input.py   # feature-dict keys/validation, Hz normalization/clamping, valid-JSON output
     test_dataset.py      # example structure/validation, JSONL save/load roundtrip, Korean text I/O
+    test_baseline_model.py # JSON extraction/validation (fake generate_fn, no model load),
+                    # plus real-model integration tests that load the actual baseline LLM
 data/
     input/        # place source audio here (demo also writes its preprocessing inputs here)
     output/       # generated audio and plots land here
@@ -75,6 +82,10 @@ data/
 ```powershell
 pip install -r requirements.txt
 ```
+
+The baseline model (`llm_music.baseline_model`) downloads `Qwen/Qwen2.5-0.5B-Instruct`
+(~1 GB) from Hugging Face on first use and caches it under `~/.cache/huggingface`;
+later runs load from the local cache. It runs on CPU — no GPU is required.
 
 ## Usage
 
@@ -90,6 +101,14 @@ and prints the strongest FFT frequency bins to the console.
 
 ```powershell
 pytest tests/
+```
+
+Tests marked `integration` (the two that load the real baseline LLM) are deselected
+by default — see `pytest.ini`. Run them explicitly, once the model is downloaded/
+cached, with:
+
+```powershell
+pytest tests/ -m integration
 ```
 
 ## Conventions
